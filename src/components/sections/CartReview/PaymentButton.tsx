@@ -1,14 +1,12 @@
 "use client"
 
-import ErrorMessage from "@/components/molecules/ErrorMessage/ErrorMessage"
-import { isManual, isStripe } from "../../../lib/constants"
+import { Button } from "@/components/atoms"
 import { placeOrder } from "@/lib/data/cart"
 import { HttpTypes } from "@medusajs/types"
 import { useElements, useStripe } from "@stripe/react-stripe-js"
 import React, { useEffect, useState } from "react"
-import { Button } from "@/components/atoms"
-import { orderErrorFormatter } from "@/lib/helpers/order-error-formatter"
-import { toast } from "@/lib/helpers/toast"
+import { isManual, isPayoo, isStripe } from "../../../lib/constants"
+import ErrorMessage from "@/components/molecules/ErrorMessage/ErrorMessage"
 
 type PaymentButtonProps = {
   cart: HttpTypes.StoreCart
@@ -40,6 +38,14 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
     case isManual(paymentSession?.provider_id):
       return (
         <ManualTestPaymentButton notReady={notReady} data-testid={dataTestId} />
+      )
+    case isPayoo(paymentSession?.provider_id):
+      return (
+        <PayooPaymentButton
+          cart={cart}
+          notReady={notReady}
+          data-testid={dataTestId}
+        />
       )
     default:
       return (
@@ -156,6 +162,62 @@ const StripePaymentButton = ({
         error={errorMessage}
         data-testid="stripe-payment-error-message"
       /> */}
+    </>
+  )
+}
+
+const PayooPaymentButton = ({
+  cart,
+  notReady,
+  "data-testid": dataTestId,
+}: {
+  cart: HttpTypes.StoreCart
+  notReady: boolean
+  "data-testid"?: string
+}) => {
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const handlePayment = async () => {
+    setSubmitting(true)
+    setErrorMessage(null)
+    try {
+      const res = await fetch("/api/payoo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartId: cart.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.message || "Unable to initiate Payoo payment")
+      }
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl as string
+      } else {
+        throw new Error("Missing payment URL")
+      }
+    } catch (e: any) {
+      setErrorMessage(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <Button
+        disabled={notReady}
+        onClick={handlePayment}
+        loading={submitting}
+        className="w-full"
+        data-testid={dataTestId}
+      >
+        Pay with Payoo
+      </Button>
+      <ErrorMessage
+        error={errorMessage}
+        data-testid="payoo-payment-error-message"
+      />
     </>
   )
 }
